@@ -1,0 +1,41 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# TypeScript
+dist/
+build/
+*.tsbuildinfo
+
+# Optional IDE files
+.vscode/
+.idea/
+*.sw?
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# MacOS / Linux / Windows system files
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Coverage directory used by testing tools
+coverage/
+
+# Output of 'npm pack'
+*.tgz
+
+# Optional lock files (depending on your package manager)
+package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+git@github.com:mathisrgt/xrpl-ready-to-go-typescript.git
