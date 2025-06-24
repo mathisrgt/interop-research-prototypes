@@ -35,7 +35,7 @@ export async function axelarXrplToEvm() {
         // DEVNET: rGAbJZEzU6WaYv5y1LfyN7LBBcQJ3TxsKC
         // TESTNET: rNrjh1KGZk2jBR3wPfAQnoidtFFYQKbQn2
         // MAINNET: rfmS3zqrQrka8wVyhXifEeyTwe8AMz2Yhw // Multisig
-        Amount: xrpToDrops(6),
+        Amount: xrpToDrops(8),
         Memos: [
             {
                 Memo: {
@@ -111,7 +111,7 @@ export async function axelarXrplToEvm() {
             const currentBlockNb = Number(currentBlockNbBg);
 
             data.items.reverse().forEach((tx: any, i: number) => {
-                console.log(`\n${chalk.bgBlue(`${i + 1}.`)} Hash: ${tx.block_hash} | From: ${tx.from.hash}`);
+                console.log(`\n${chalk.bgBlue(`${i + 1}.`)} Hash: ${tx.transaction_hash} | From: ${tx.from.hash}`);
 
                 console.log(chalk.bgBlue(`\nBlock number`));
                 console.log(`Transaction: ${tx.block_number}`);

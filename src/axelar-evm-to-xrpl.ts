@@ -1,12 +1,16 @@
 import chalk from "chalk";
-import { createPublicClient, createWalletClient, http } from "viem";
+import { createPublicClient, createWalletClient, formatEther, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { xrplevmTestnet } from "viem/chains";
-import { EVM_WALLET_PRIVATE_KEY } from "./environment";
-import { AccountTxTransaction, Client, dropsToXrp, Transaction } from "xrpl";
+import { EVM_WALLET_PRIVATE_KEY, XRPL_WALLET_ADDRESS } from "./environment";
+import { AccountTxTransaction, Client, dropsToXrp, Payment, Transaction, TransactionAndMetadata, TransactionMetadata, xrpToDrops } from "xrpl";
 
 export async function axelarEvmToXrpl() {
     console.log(chalk.bgWhite(`-- AXELAR BRIGE ${chalk.bgBlue("EVM -> XRPL")} --`));
+
+    const client = new Client("wss://s.altnet.rippletest.net:51233/");
+    await client.connect();
+
     let startTime = Date.now();
 
     const publicClient = createPublicClient({
@@ -20,6 +24,15 @@ export async function axelarEvmToXrpl() {
     });
 
     const account = privateKeyToAccount(`0x${EVM_WALLET_PRIVATE_KEY}`);
+
+    const evmWallet = privateKeyToAccount(`0x${EVM_WALLET_PRIVATE_KEY}`);
+    const initEvmWalletBalance = await publicClient.getBalance({ address: evmWallet.address });
+    const initXrplWalletBalance = await client.getXrpBalance(XRPL_WALLET_ADDRESS);
+
+    console.log(chalk.bgRed(`\nInitial settings`));
+    console.log(`XRPL wallet: ${XRPL_WALLET_ADDRESS} - Balance: ${initXrplWalletBalance} XRP`);
+    console.log(`XRPL EVM wallet: ${evmWallet.address} - Balance: ${formatEther(initEvmWalletBalance)} XRP`);
+
     try {
         startTime = Date.now();
         const hash = await walletClient.writeContract({
@@ -67,8 +80,8 @@ export async function axelarEvmToXrpl() {
             args: [
                 "0xba5a21ca88ef6bba2bfff5088994f90e1077e2a1cc3dcc38bd261f00fce2824f",
                 "xrpl",
-                "0x724458747763574234676851687244614345796e656d57794c714850446d6f314b74",
-                10000000000000000000n,
+                "0x72475975465771536a466661523237636f654e386378614375657668724e4c624345",
+                4000000000000000000n,
                 "0x",
                 500000000000000000n,
             ],
@@ -78,8 +91,8 @@ export async function axelarEvmToXrpl() {
         console.log(chalk.bgWhite(`✅ Transaction submitted: ${hash}`));
 
         const receipt = await publicClient.waitForTransactionReceipt({ hash });
-        console.log("✅ Transaction confirmed in block", receipt.blockNumber);
-        
+        console.log(chalk.bgGreen("✅ Transaction confirmed in block", receipt.blockNumber));
+
         const elapsed = Math.floor((Date.now() - startTime) / 1000);
         const minutes = Math.floor(elapsed / 60);
         const seconds = elapsed % 60;
@@ -90,17 +103,10 @@ export async function axelarEvmToXrpl() {
         console.error(error);
     }
 
-    const client = new Client("wss://s.altnet.rippletest.net:51233/");
-    await client.connect();
+    console.log("🔄 Waiting for 90 seconds to allow the transaction to be processed...");
+    await new Promise(resolve => setTimeout(resolve, 90_000));
 
-    console.log("Connected to the XRPL TESTNET");
-
-    console.log("🔄 Waiting for 100 seconds to allow the transaction to be processed...");
-    await new Promise(resolve => setTimeout(resolve, 100_000));
-
-    const RECIPIENT = "rDXtwcWB4ghQhrDaCEynemWyLqHPDmo1Kt";
-    const AMOUNT_XRP = 10;
-    const TIME_WINDOW_MINUTES = 5;
+    const TIME_WINDOW_MINUTES = 3;
 
     while (true) {
         const ledgerResponse = await client.request({ command: "ledger_closed" });
@@ -113,23 +119,25 @@ export async function axelarEvmToXrpl() {
 
         const txs = await client.request({
             command: "account_tx",
-            account: RECIPIENT,
+            account: XRPL_WALLET_ADDRESS,
             ledger_index_min: minLedger,
             ledger_index_max: latestLedger,
             binary: false,
             limit: 100,
         });
 
-        console.log('Transactions:', txs);
+
         const matches = txs.result.transactions.filter((tx: AccountTxTransaction) => {
-            console.log('Transaction:', tx);
-            if (tx.tx !== undefined) {
-                const transactionData = tx.tx as Transaction;
-                console.log('Transaction Data:', transactionData);
+            if(tx.tx_json?.TransactionType === "Payment") console.log('Transaction account: ', (tx.tx_json.Destination === XRPL_WALLET_ADDRESS))
+            
+            console.log('Transaction: ', tx.tx_json);
+
+            if (tx.tx_json) {
                 return (
-                    transactionData.TransactionType === "Payment" &&
-                    transactionData.Destination === RECIPIENT &&
-                    dropsToXrp(transactionData.Amount as string) === AMOUNT_XRP
+                    tx.tx_json.TransactionType === "Payment" &&
+                    tx.tx_json.Destination === XRPL_WALLET_ADDRESS
+                    // tx.tx_json.Account === "rNrjh1KGZk2jBR3wPfAQnoidtFFYQKbQn2" // Axelar multisig address on the Testnet
+                    // dropsToXrp(Number((matches[0].meta.delivered_amount))
                 );
             }
         });
@@ -140,14 +148,25 @@ export async function axelarEvmToXrpl() {
         const elapsedTimeFormatted = `${minutes}m ${seconds}s`;
 
         if (matches.length > 0) {
-            console.log(`✅ Transaction found matching 10 XRP payment!`);
+            console.log(`✅ Transaction found matching ${dropsToXrp(Number((matches[0].meta as TransactionMetadata).delivered_amount))} XRP payment!`);
             console.log(`⏱ Received after ${elapsedTimeFormatted}`);
             break;
         } else {
-            console.log(`❌ No 10 XRP payments received in the last 5 minutes. Elapsed time: ${elapsedTimeFormatted}. Retrying in 1 second...`);
+            console.log(`❌ No payment received in the last ${TIME_WINDOW_MINUTES} minutes. Elapsed time: ${elapsedTimeFormatted}. Retrying in 1 second...`);
         }
 
         await new Promise(resolve => setTimeout(resolve, 1_000));
     }
 
+    console.log(`⏳ Waiting 20 seconds for return gas tx...`);
+    await new Promise(resolve => setTimeout(resolve, 20_000));
+
+    const finalEvmWalletBalance = await publicClient.getBalance({ address: evmWallet.address });
+    const finalXrplWalletBalance = await client.getXrpBalance(XRPL_WALLET_ADDRESS);
+
+    console.log(`XRPL wallet balance ${finalXrplWalletBalance} XRP`);
+    console.log(`EVM wallet balance ${formatEther(finalEvmWalletBalance)} XRP`);
+    console.log(`Bridging overall cost: ${initXrplWalletBalance - Number(formatEther(finalEvmWalletBalance))} XRP`);
+
+    await client.disconnect();
 }
