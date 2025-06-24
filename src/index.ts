@@ -1,7 +1,8 @@
 import chalk from 'chalk';
 import readline from 'readline';
 
-import { axelar } from './axelar';
+import { axelarXrplToEvm } from './axelar-xrpl-to-evm';
+import { axelarEvmToXrpl } from './axelar-evm-to-xrpl';
 
 const rl = readline.createInterface({
     input: process.stdin,
@@ -9,15 +10,26 @@ const rl = readline.createInterface({
 });
 
 function menu() {
-    console.log('\nChoose a bridge to run:');
-    console.log(`  ${chalk.grey('1 - Axelar')}`);
-    console.log('  0 - Exit\n');
+    console.log('\nChoose a bridge to run:\n');
+    console.log(`  ${chalk.bgWhite('Axelar Network')}`);
+    console.log(`  ${chalk.white('1 - (XRP) XRPL ➡️ XRPL EVM')}`);
+    console.log(`  ${chalk.white('2 - (XRP) XRPL EVM ➡️ XRPL')}`);
+    console.log('');
+    console.log(`  ${chalk.bgMagenta('Flare Network')}`);
+    console.log(`  ${chalk.magenta('3 - (XRP - FXRP) XRPL ➡️ Songbird')}`);
+    console.log('\n0 - Exit\n');
 }
 
 async function handleChoice(choice: string) {
     switch (choice.trim()) {
         case '1':
-            await axelar();
+            await axelarXrplToEvm();
+            break;
+        case '2':
+            await axelarEvmToXrpl();
+            break;
+        case '3':
+            console.log('Not supported yet.');
             break;
         case '0':
             console.log('Bye!');
